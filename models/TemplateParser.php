@@ -3,38 +3,58 @@
 class TemplateParser
 {
     protected $rowNumber;
+    protected $templateName = "";
+    protected $parsedTextTemplates = [];
 
-    public function convertTemplateToHtml($items, $text)
+    public function convertTemplateToHtml($items, $templateName)
     {
-        $remaining = $text;
-        $parsed = "";
+        $raw =  get_option(MapsAliveConfig::OPTION_TEMPLATES);
+        $templates = json_decode($raw, true);
 
-        while (true)
+        if (!array_key_exists($templateName, $templates))
+            return "No such template name";
+
+        $rows = $templates[$templateName];
+
+        $html = "";
+
+        foreach ($rows as $row)
         {
-            $start = strpos($remaining, '${');
-
-            if ($start == false)
+            $remaining = $row;
+            while (true)
             {
-                $parsed .= $remaining;
-                break;
+                // Look for a substitution in the remaining text on this row.
+                $start = strpos($remaining, '${');
+                if ($start === false)
+                {
+                    // There's no substitution. Keep the rest of the row text and go onto the next.
+                    $html .= $remaining;
+                    break;
+                }
+                $end = strpos($remaining, '}');
+                $end += 1;
+
+                // Get the substitution including the ${...} wrapper.
+                $substitution = substr($remaining, $start, $end - $start);
+
+                // Replace the entire substitution with a data value.
+                $replacement = $this->replaceSubstitution($items, $substitution);
+                $html .= substr($remaining, 0, $start);
+                $html .= $replacement;
+
+                $remaining = substr($remaining, $end);
             }
-
-            $end = strpos($remaining, '}');
-            $end += 1;
-            $substitution = substr($remaining, $start, $end - $start);
-
-            $substitution = $this->replaceSubstitution($items, $substitution);
-
-            $parsed .= substr($remaining, 0, $start);
-            $parsed .= $substitution;
-            $remaining = substr($remaining, $end);
         }
 
-        return $parsed;
+        return $html;
     }
 
-    protected function parseRow($row, $convertElementNamesToIds)
+    protected function parseTemplateRow($row, $convertElementNamesToIds)
     {
+        // This method converts a text template row that contains elements names to a json template row that
+        // contains element Ids. It also converts a json template row that contains element Ids to a text
+        // template row that contains element names.
+
         $remaining = $row;
         $parsed = "";
         $done = false;
@@ -42,7 +62,7 @@ class TemplateParser
         while (!$done)
         {
             $start = strpos($remaining, '${');
-            if ($start == false)
+            if ($start === false)
             {
                 $done = true;
                 $parsed .= $remaining;
@@ -50,9 +70,9 @@ class TemplateParser
             else
             {
                 $end = strpos($remaining, '}');
-                if ($end == false)
+                if ($end === false)
                 {
-                    throw new Omeka_Validate_Exception(__('Closing brace is missing on line %s', $this->rowNumber));
+                    throw new Omeka_Validate_Exception(__('Closing brace is missing in template %s on line %s', $this->templateName, $this->rowNumber));
                 }
                 else
                 {
@@ -69,8 +89,31 @@ class TemplateParser
         return $parsed;
     }
 
+    protected function parseTextTemplateDefinition($row, $index)
+    {
+        $this->templateName = trim(substr($row, $index + 9));
+        $index = strpos($this->templateName, ' ');
+        if ($index !== false)
+            $this->templateName = substr($this->templateName, 0, $index);
+    }
+
+    protected function parseTextTemplateRows($templateName, $rows)
+    {
+        $this->parsedTextTemplates[$templateName] = [];
+        $this->templateName = $templateName;
+        $this->rowNumber = 0;
+        foreach ($rows as $row)
+        {
+            $this->rowNumber += 1;
+            $parsedRow = $this->parseTemplateRow($row, true);
+            $this->parsedTextTemplates[$templateName][] = $parsedRow;
+        }
+    }
+
     protected function parseSubstitution($substitution, $convertElementNamesToIds)
     {
+        // This method converts a substitution value that is within ${...} to either use an element name or element Id.
+
         $content = substr($substitution, 2, strlen($substitution) - 3);
         $parts = array_map('trim', explode(',', $content));
         $elementNameOrId = $parts[0];
@@ -94,20 +137,34 @@ class TemplateParser
         return '${' . implode(',', $parts) . '}';
     }
 
-    public function parseTemplate($text, $convertElementNamesToIds)
+    public function parseTextTemplates($text)
     {
-        $parsed = "";
-
+        $templates = [];
         $rows = explode(PHP_EOL, $text);
-        $this->rowNumber = 0;
+
         foreach ($rows as $row)
         {
-            $this->rowNumber += 1;
-            $parsedRow = $this->parseRow($row, $convertElementNamesToIds);
-            $parsed .= $parsedRow . PHP_EOL;
+            if (trim($row) == "")
+                continue;
+
+            $index = strpos(strtolower($row), 'template:');
+            $isTemplateDefinitionRow = $index !== false;
+            if ($isTemplateDefinitionRow)
+            {
+                $this->parseTextTemplateDefinition($row, $index);
+                $templates[$this->templateName] = [];
+                continue;
+            }
+
+            $templates[$this->templateName][] = $row;
         }
 
-        return $parsed;
+        foreach ($templates as $templateName => $rows)
+        {
+            $this->parseTextTemplateRows($templateName, $rows);
+        }
+
+        return json_encode($this->parsedTextTemplates);
     }
 
     protected function replaceSubstitution($items, $substitution)
@@ -137,5 +194,24 @@ class TemplateParser
             $value = AvantMapsAlive::getElementTextFromElementId($item, $elementId);
         }
         return $value;
+    }
+
+    public function unparseJsonTemplates($json)
+    {
+        $text = "";
+        $templates = json_decode($json, true);
+
+        foreach ($templates as $templateName => $rows)
+        {
+            $text .= "Template: $templateName";
+            foreach ($rows as $row)
+            {
+                $parsedRow = $this->parseTemplateRow($row, false);
+                $text .= PHP_EOL . $parsedRow;
+            }
+            $text .= PHP_EOL . PHP_EOL;
+        }
+
+        return $text;
     }
 }

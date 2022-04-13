@@ -16,7 +16,7 @@ class MapsAliveConfig
         {
             $raw = get_option(self::OPTION_TEMPLATES);
             $parser = new TemplateParser();
-            $text = $parser->parseTemplate($raw, false);
+            $text = $parser->unparseJsonTemplates($raw);
         }
 
         return $text;
@@ -31,7 +31,7 @@ class MapsAliveConfig
     {
         $text = $_POST[self::OPTION_TEMPLATES];
         $parser = new TemplateParser();
-        $parsed = $parser->parseTemplate($text, true);
+        $parsed = $parser->parseTextTemplates($text);
         set_option(self::OPTION_TEMPLATES, $parsed);
     }
 }

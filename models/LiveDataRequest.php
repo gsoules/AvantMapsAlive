@@ -4,12 +4,15 @@ class LiveDataRequest
 {
     public function handleLiveDataRequest()
     {
-        $id = isset($_GET['id']) ? $_GET['id'] : 0;
+        $itemIdentifiers = isset($_GET['id']) ? $_GET['id'] : 0;
+        if ($itemIdentifiers == 0)
+            return "No item identifier(s) provided";
 
-        if ($id == 0)
-            return "No item Id";
+        $templateName = isset($_GET['template']) ? $_GET['template'] : "";
+        if ($templateName == "")
+            return "No template name provided";
 
-        $identifiers = explode(',', $id);
+        $identifiers = explode(',', $itemIdentifiers);
 
         $identifierElementId = AvantMapsAlive::getElementIdForElementName("Identifier");
 
@@ -23,10 +26,8 @@ class LiveDataRequest
                 $items[] = $records[0];
         }
 
-        $template =  get_option(MapsAliveConfig::OPTION_TEMPLATES);
-
         $parser = new TemplateParser();
-        $response = $parser->convertTemplateToHtml($items, $template);
+        $response = $parser->convertTemplateToHtml($items, $templateName);
 
         return $response;
     }

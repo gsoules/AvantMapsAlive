@@ -23,9 +23,19 @@ class MapsAliveConfig
 
     public static function getOptionTextForTemplates()
     {
-        $text = get_option(self::OPTION_TEMPLATES);
-        $parsed = self::parseTemplate($text, false);
-        return $parsed;
+        // When a configuration occurs, the Configure Plugin page posts back to
+        // itself to display the error after the user presses the Save button.
+        if (isset($_POST['install_plugin']))
+        {
+            $text = $_POST[self::OPTION_TEMPLATES];
+        }
+        else
+        {
+            $raw = get_option(self::OPTION_TEMPLATES);
+            $text = self::parseTemplate($raw, false);
+        }
+
+        return $text;
     }
 
     private static function parseTemplate($text, $convertElementNamesToIds)

@@ -4,32 +4,41 @@ class LiveDataRequest
 {
     public function handleLiveDataRequest()
     {
-        $identifier = isset($_GET['id']) ? $_GET['id'] : 0;
+        $id = isset($_GET['id']) ? $_GET['id'] : 0;
 
-        if ($identifier == 0)
+        if ($id == 0)
             return "No item Id";
 
-        $identifierElementId = self::getElementIdForElementName("Identifier");
-        $items = get_records('Item', array('search' => '', 'advanced' => array(array('element_id' => $identifierElementId, 'type' => 'is exactly', 'terms' => $identifier))));
-        if (empty($items))
-            return "No item found for $identifier";
-        $item = $items[0];
+        $identifiers = explode(',', $id);
 
-        if ($item == null)
-            return "Not an item Id";
+        $identifierElementId = self::getElementIdForElementName("Identifier");
+
+        $items = [];
+        foreach ($identifiers as $identifier)
+        {
+            $records = get_records('Item', array('search' => '', 'advanced' => array(array('element_id' => $identifierElementId, 'type' => 'is exactly', 'terms' => $identifier))));
+            if (empty($records))
+                $items[] = null;
+            else
+                $items[] = $records[0];
+        }
 
         $titleElementId = self::getElementIdForElementName("Title");
-        $title = self::getElementTextFromElementId($item, $titleElementId);
+        $title = self::getElementTextFromElementId($items[0], $titleElementId);
 
         $descriptionElementId = self::getElementIdForElementName("Description");
-        $description = self::getElementTextFromElementId($item, $descriptionElementId);
+        $description = self::getElementTextFromElementId($items[0], $descriptionElementId);
 
-        $itemImageUrl = self::getItemFileUrl($item);
+        $itemImageUrl = self::getItemFileUrl($items[0]);
 
-        $itemId = $item->id;
+        $itemId = $items[0]->id;
         $itemUrl = WEB_ROOT . '/items/show/' . $itemId;
 
-        $response = "<div class='swhpl'><div class='title-element'>$title</div><div class='description-element'>$description</div><div><img src='$itemImageUrl'></div><div></div><a target='_blank' href='$itemUrl'>View this item</a></div>";
+        $template = MapsAliveConfig::getOptionTextForTemplates();
+        $response = str_replace('${Title}', $title, $template);
+        $response = str_replace('${Description}', $description, $response);
+        $response = str_replace('${file-url}', $itemImageUrl, $response);
+        $response = str_replace('${item-url}', $itemUrl, $response);
 
         return $response;
     }

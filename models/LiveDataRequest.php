@@ -4,12 +4,16 @@ class LiveDataRequest
 {
     public function handleLiveDataRequest()
     {
-        $itemId = isset($_GET['id']) ? $_GET['id'] : 0;
+        $identifier = isset($_GET['id']) ? $_GET['id'] : 0;
 
-        if ($itemId == 0)
+        if ($identifier == 0)
             return "No item Id";
 
-        $item = self::getItemFromId($itemId);
+        $identifierElementId = self::getElementIdForElementName("Identifier");
+        $items = get_records('Item', array('search' => '', 'advanced' => array(array('element_id' => $identifierElementId, 'type' => 'is exactly', 'terms' => $identifier))));
+        if (empty($items))
+            return "No item found for $identifier";
+        $item = $items[0];
 
         if ($item == null)
             return "Not an item Id";
@@ -22,7 +26,10 @@ class LiveDataRequest
 
         $itemImageUrl = self::getItemFileUrl($item);
 
-        $response = "<div class='title-element'>$title</div class='description-element'><div>$description</div><div><img src='$itemImageUrl'></div>";
+        $itemId = $item->id;
+        $itemUrl = WEB_ROOT . '/items/show/' . $itemId;
+
+        $response = "<div class='swhpl'><div class='title-element'>$title</div><div class='description-element'>$description</div><div><img src='$itemImageUrl'></div><div></div><a target='_blank' href='$itemUrl'>View this item</a></div>";
 
         return $response;
     }
@@ -56,7 +63,7 @@ class LiveDataRequest
         $file = $item->getFile(0);
         if (!empty($file) && $file->hasThumbnail())
         {
-            $url = $file->getWebPath('original');
+            $url = $file->getWebPath('fullsize');
 
             $supportedImageMimeTypes = self::supportedImageMimeTypes();
 
@@ -68,11 +75,6 @@ class LiveDataRequest
         }
 
         return $url;
-    }
-
-    public static function getItemFromId($id)
-    {
-        return get_record_by_id('Item', $id);
     }
 
     public static function supportedImageMimeTypes()

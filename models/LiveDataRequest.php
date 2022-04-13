@@ -23,24 +23,67 @@ class LiveDataRequest
                 $items[] = $records[0];
         }
 
-        $titleElementId = self::getElementIdForElementName("Title");
-        $title = self::getElementTextFromElementId($items[0], $titleElementId);
-
-        $descriptionElementId = self::getElementIdForElementName("Description");
-        $description = self::getElementTextFromElementId($items[0], $descriptionElementId);
-
-        $itemImageUrl = self::getItemFileUrl($items[0]);
-
-        $itemId = $items[0]->id;
-        $itemUrl = WEB_ROOT . '/items/show/' . $itemId;
-
-        $template = MapsAliveConfig::getOptionTextForTemplates();
-        $response = str_replace('${Title}', $title, $template);
-        $response = str_replace('${Description}', $description, $response);
-        $response = str_replace('${file-url}', $itemImageUrl, $response);
-        $response = str_replace('${item-url}', $itemUrl, $response);
-
+        $template =  get_option(MapsAliveConfig::OPTION_TEMPLATES);
+        $response = self::convertTemplateToHtml($items, $template);
         return $response;
+    }
+
+    private static function convertTemplateToHtml($items, $text)
+    {
+        $remaining = $text;
+        $parsed = "";
+
+        while (true)
+        {
+            $start = strpos($remaining, '${');
+
+            if ($start == false)
+            {
+                $parsed .= $remaining;
+                break;
+            }
+
+            $end = strpos($remaining, '}');
+            $end += 1;
+            $substitution = substr($remaining, $start, $end - $start);
+
+            $substitution = self::replaceSubstitution($items, $substitution);
+
+            $parsed .= substr($remaining, 0, $start);
+            $parsed .= $substitution;
+            $remaining = substr($remaining, $end);
+        }
+
+        return $parsed;
+    }
+
+    private static function replaceSubstitution($items, $substitution)
+    {
+        $content = substr($substitution, 2, strlen($substitution) - 3);
+        $parts = array_map('trim', explode(',', $content));
+        $elementId = $parts[0];
+
+        if ($elementId == 'file-url')
+        {
+            $derivative = $parts[1];
+            $itemIndex = count($parts) > 2 ? $parts[2] - 1 : 0;
+            $fileIndex = count($parts) > 3 ? $parts[3] - 1 : 0;
+            $item = $items[$itemIndex];
+            $value = self::getItemFileUrl($item, $derivative, $fileIndex);
+        }
+        else if ($elementId == 'item-url')
+        {
+            $itemIndex = count($parts) > 1 ? $parts[1] - 1 : 0;
+            $item = $items[$itemIndex];
+            $value = WEB_ROOT . '/items/show/' . $item->id;
+        }
+        else
+        {
+            $itemIndex = count($parts) > 1 ? $parts[1] - 1 : 0;
+            $item = $items[$itemIndex];
+            $value = self::getElementTextFromElementId($item, $elementId);
+        }
+        return $value;
     }
 
     public static function getElementIdForElementName($elementName)
@@ -66,13 +109,13 @@ class LiveDataRequest
         return $asHtml ? html_escape($text) : $text;
     }
 
-    public static function getItemFileUrl($item)
+    public static function getItemFileUrl($item, $derivative, $fileIndex)
     {
         $url = '';
-        $file = $item->getFile(0);
+        $file = $item->getFile($fileIndex);
         if (!empty($file) && $file->hasThumbnail())
         {
-            $url = $file->getWebPath('fullsize');
+            $url = $file->getWebPath($derivative);
 
             $supportedImageMimeTypes = self::supportedImageMimeTypes();
 

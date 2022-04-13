@@ -4,23 +4,28 @@ class MapsAliveConfig
 {
     const OPTION_TEMPLATES = 'avantmapsalive_templates';
 
+    private static function getElementIdForElementName($elementName)
+    {
+        $db = get_db();
+        $elementTable = $db->getTable('Element');
+        $element = $elementTable->findByElementSetNameAndElementName('Dublin Core', $elementName);
+        if (empty($element))
+            $element = $elementTable->findByElementSetNameAndElementName('Item Type Metadata', $elementName);
+        return empty($element) ? 0 : $element->id;
+    }
+
+    private static function getElementNameForElementId($elementId)
+    {
+        $db = get_db();
+        $element = $db->getTable('Element')->find($elementId);
+        return isset($element) ? $element->name : '';
+    }
+
     public static function getOptionTextForTemplates()
     {
         $text = get_option(self::OPTION_TEMPLATES);
         $parsed = self::parseTemplate($text, false);
         return $parsed;
-    }
-
-    public static function saveConfiguration()
-    {
-        self::saveOptionTextForTemplates();
-    }
-
-    public static function saveOptionTextForTemplates()
-    {
-        $text = $_POST[self::OPTION_TEMPLATES];
-        $parsed = self::parseTemplate($text, true);
-        set_option(self::OPTION_TEMPLATES, $parsed);
     }
 
     private static function parseTemplate($text, $convertElementNamesToIds)
@@ -43,8 +48,7 @@ class MapsAliveConfig
                 $end = strpos($remaining, '}');
                 if ($end == false)
                 {
-                    $done = true;
-                    $error = "No closing brace";
+                    throw new Omeka_Validate_Exception(__('Closing brace is missing'));
                 }
                 else
                 {
@@ -88,20 +92,15 @@ class MapsAliveConfig
         return '${' . implode(',', $parts) . '}';
     }
 
-    private static function getElementIdForElementName($elementName)
+    public static function saveConfiguration()
     {
-        $db = get_db();
-        $elementTable = $db->getTable('Element');
-        $element = $elementTable->findByElementSetNameAndElementName('Dublin Core', $elementName);
-        if (empty($element))
-            $element = $elementTable->findByElementSetNameAndElementName('Item Type Metadata', $elementName);
-        return empty($element) ? 0 : $element->id;
+        self::saveOptionTextForTemplates();
     }
 
-    private static function getElementNameForElementId($elementId)
+    public static function saveOptionTextForTemplates()
     {
-        $db = get_db();
-        $element = $db->getTable('Element')->find($elementId);
-        return isset($element) ? $element->name : '';
+        $text = $_POST[self::OPTION_TEMPLATES];
+        $parsed = self::parseTemplate($text, true);
+        set_option(self::OPTION_TEMPLATES, $parsed);
     }
 }
